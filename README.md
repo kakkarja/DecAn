@@ -50,3 +50,6 @@ decan -f path\text.txt dir\path text_name.txt
 * **Add new function "-f" for saving text that has been fixed its punctuation position to a new txt file.**
     * **This function use dependency from GenPy-karjakak.** 
     * **https://pypi.org/project/GenPy-karjakak**
+* **Add multi-threading for analyzing.**
+    * **Using "-m" after "-s".**
+    * ```decan -a path\text.txt -s "Best" e y -m```
