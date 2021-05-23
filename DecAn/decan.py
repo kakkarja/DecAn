@@ -7,11 +7,13 @@ import os
 import argparse
 import json
 import functools
+from functools import partial
 import re
 import string
 import pickle
 import io
 from GenPy import Fixstr
+import concurrent.futures
 
 """
 Snippet from:
@@ -66,7 +68,7 @@ def reconst(text: str) -> dict:
     except Exception as e:
         raise e
 
-def lookwd(alp: str, text: str) -> tuple:
+def lookwd(text: str, alp: str) -> tuple:
     """Looking for an alphabet or a words positions."""
     
     if alp in text:
@@ -80,8 +82,7 @@ def lookwd(alp: str, text: str) -> tuple:
                 np += 1
                 c -= 1
                 text = text[text.find(alp)+1:]
-            del np, text, c, alp
-            return pos
+            del np, text, c
         else:
             while c:
                 np = np + text.find(alp)
@@ -89,8 +90,10 @@ def lookwd(alp: str, text: str) -> tuple:
                 np += 1
                 c -= 1
                 text = text[text.find(alp)+1:]
-            del np, text, c, alp
-            return pos
+            del np, text, c
+        return alp, pos
+    else:
+        return alp, None
         
 @timer
 def deconstruct(text: str, filename: str, path: str):
@@ -140,11 +143,14 @@ def construct(file: str) -> str:
             raise Exception('WARNING-ERROR: Please choose a deconstructed file!!!')
 
 @timer
-def textsortchrs(txts: str, alph: list = None):
+def textsortchrs(txts: str, alph: list = None, tm: bool = False):
     """
     Doing analysis of finding each char or words for their position in text.
-    * Reference:
-    * https://stackoverflow.com/questions/26184100/how-does-v-differ-from-x0b-or-x0c
+    * References:
+    * https://stackoverflow.com/questions/26184100/
+    * how-does-v-differ-from-x0b-or-x0c
+    * https://stackoverflow.com/questions/6785226/
+    * pass-multiple-parameters-to-concurrent-futures-executor-map
     * \v == VT [vertical tab (\x0b)]
     * \f == FF [form feed (\x0c)]
     * In string.printable appearing "\x0b" and "\x0c"
@@ -155,27 +161,46 @@ def textsortchrs(txts: str, alph: list = None):
                 txts = rd.read()
         else:
             raise Exception('Cannot read non-.txt file!!!')
-    txts = Fixstr(txts).fixingfs(False)    
-    if isinstance(alph, list):
-        dics = {}
-        regex = re.compile(r"\S?\w+\S+")
-        for i in alph:
-            gtp = lookwd(i, txts)
-            if gtp:
-                dics = dics | {i: {len(gtp): gtp}} 
-                del gtp
-                if len(i) > 1:
-                    print(f'"{i}": {dics[i]}')
-                    print(f'"{i}" is {len(dics[i][list(dics[i])[0]])} out of total {len(tuple(regex.finditer(txts)))} words!\n')
-                    del dics[i]
-                else:
-                    print(f'{repr(i)}: {dics[i]}')
-                    print(f'{repr(i)} is {len(dics[i][list(dics[i])[0]])} out of total {len(txts)} chars!\n')
-                    del dics[i]
+    txts = Fixstr(txts).fixingfs(False)
+    try:
+        if isinstance(alph, list):
+            dics = {}
+            regex = re.compile(r"\S?\w+\S+")
+            if tm:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    for result in executor.map(partial(lookwd, txts), alph):
+                        i, gtp = result
+                        if gtp:
+                            dics = dics | {i: {len(gtp): gtp}} 
+                            del gtp
+                            if len(i) > 1:
+                                print(f'"{i}": {dics[i]}')
+                                print(f'"{i}" is {len(dics[i][list(dics[i])[0]])} out of total {len(tuple(regex.finditer(txts)))} words!\n')
+                                del dics[i]
+                            else:
+                                print(f'{repr(i)}: {dics[i]}')
+                                print(f'{repr(i)} is {len(dics[i][list(dics[i])[0]])} out of total {len(txts)} chars!\n')
+                                del dics[i]
+                        else:
+                            print(f'No such word {repr(i)} in text!!!')
             else:
-                print(f'No such word {repr(i)} in text!!!')
-    else:
-        try:
+                for i in alph:
+                    i, gtp = lookwd(txts, i)
+                    if gtp:
+                        dics = dics | {i: {len(gtp): gtp}} 
+                        del gtp
+                        if len(i) > 1:
+                            print(f'"{i}": {dics[i]}')
+                            print(f'"{i}" is {len(dics[i][list(dics[i])[0]])} out of total {len(tuple(regex.finditer(txts)))} words!\n')
+                            del dics[i]
+                        else:
+                            print(f'{repr(i)}: {dics[i]}')
+                            print(f'{repr(i)} is {len(dics[i][list(dics[i])[0]])} out of total {len(txts)} chars!\n')
+                            del dics[i]
+                    else:
+                        print(f'No such word {repr(i)} in text!!!')
+            del regex, txts, alph, dics
+        else:
             alph = dict(sorted(reconst(txts).items(), key = lambda k: len(k[1]), reverse = True))
             once = tuple()
             maxi = ('', 0)
@@ -220,10 +245,10 @@ def textsortchrs(txts: str, alph: list = None):
             print(f"- Numerical: [{', '.join(sorted(repr(i) for i in digi))}].\n")
             print(f"- Punctuation: [{', '.join(sorted(repr(i) for i in punct))}].\n")
             print(f"- Printable: [{', '.join(sorted(repr(i) for i in pri))}].")
-            del once, maxi, space, asci, punct, uni, digi, pri
-        except Exception as e:
-            raise e
-
+            del once, maxi, space, asci, punct, uni, digi, pri, txts
+    except Exception as e:
+        raise e
+    
 def fixedsaving(text: str, path: str, name: str):
     """Saving text that has been fixed to a new file."""
     
@@ -250,10 +275,14 @@ def main():
     group.add_argument('-f', '--fix_saved', type = str, nargs = 3, help = 'Fixing text and saved to a new file.')
     parser.add_argument('-a', '--analyze', type = str, help = 'Analyzing chars in a text')
     parser.add_argument('-s', '--search', type = str, action = 'extend', nargs = '+', help = 'Search list [only use after "-a"]')
+    parser.add_argument('-m', '--multi_threading', action = 'store_true', help = 'Activate multi-threading [only use after "-s"]')
     args = parser.parse_args()
     if args.analyze:
         if args.search:
-            textsortchrs(args.analyze, args.search)
+            if args.multi_threading:
+                textsortchrs(args.analyze, args.search, True)
+            else:
+                textsortchrs(args.analyze, args.search)
         else:
             textsortchrs(args.analyze)
     elif args.deconstruct:
@@ -261,7 +290,7 @@ def main():
     elif args.construct:
         print(construct(args.construct))
     elif args.fix_saved:
-        fixedsaving(args.fix_saved[0], args.fix_saved[1], args.fix_saved[2])    
+        fixedsaving(args.fix_saved[0], args.fix_saved[1], args.fix_saved[2])
 
 if __name__ == '__main__':
     main()
