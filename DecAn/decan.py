@@ -71,30 +71,21 @@ def reconst(text: str) -> dict:
 def lookwd(text: str, alp: str) -> tuple:
     """Looking for an alphabet or a words positions."""
     
-    if alp in text:
-        pos = ()
-        np = 0
-        c = text.count(alp)
-        if len(alp) == 1:
-            while c:
-                np = np + text.find(alp)
-                pos = pos + (np,)
-                np += 1
-                c -= 1
-                text = text[text.find(alp)+1:]
-            del np, text, c
+    try:
+        if alp in text:
+            regex = re.compile(rf'{alp}')
+            if len(alp) > 1:
+                pos = tuple(i.span() for i in regex.finditer(text))
+            else:
+                pos = tuple(i.span()[0] for i in regex.finditer(text))
+            del text, regex
+            return alp, pos
         else:
-            while c:
-                np = np + text.find(alp)
-                pos = pos + ((np, np + len(alp)),)
-                np += 1
-                c -= 1
-                text = text[text.find(alp)+1:]
-            del np, text, c
-        return alp, pos
-    else:
-        return alp, None
-        
+            del text
+            return alp, None
+    except Exception as e:
+        raise e
+    
 @timer
 def deconstruct(text: str, filename: str, path: str):
     """To deconstruct a text file or sentences to json."""
@@ -142,6 +133,26 @@ def construct(file: str) -> str:
         except:
             raise Exception('WARNING-ERROR: Please choose a deconstructed file!!!')
 
+def prres(txts: str, ch: str, n: tuple):
+    """Printing the results from Analyze."""
+    
+    regex = re.compile(r"\S?\w+\S+")
+    dics = {}
+    if n:
+        dics = dics | {ch: {len(n): n}}
+        del n
+        if len(ch) > 1:
+            print(f'"{ch}": {dics[ch]}')
+            print(f'"{ch}" is {len(dics[ch][list(dics[ch])[0]])} out of total {len(tuple(regex.finditer(txts)))} words!\n')
+            del dics[ch]
+        else:
+            print(f'{repr(ch)}: {dics[ch]}')
+            print(f'{repr(ch)} is {len(dics[ch][list(dics[ch])[0]])} out of total {len(txts)} chars!\n')
+            del dics[ch]
+    else:
+        print(f'No such word {repr(ch)} in text!!!')
+    del txts, dics, regex
+
 @timer
 def textsortchrs(txts: str, alph: list = None, tm: bool = False):
     """
@@ -164,42 +175,18 @@ def textsortchrs(txts: str, alph: list = None, tm: bool = False):
     txts = Fixstr(txts).fixingfs(False)
     try:
         if isinstance(alph, list):
-            dics = {}
-            regex = re.compile(r"\S?\w+\S+")
             if tm:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     for result in executor.map(partial(lookwd, txts), alph):
                         i, gtp = result
-                        if gtp:
-                            dics = dics | {i: {len(gtp): gtp}} 
-                            del gtp
-                            if len(i) > 1:
-                                print(f'"{i}": {dics[i]}')
-                                print(f'"{i}" is {len(dics[i][list(dics[i])[0]])} out of total {len(tuple(regex.finditer(txts)))} words!\n')
-                                del dics[i]
-                            else:
-                                print(f'{repr(i)}: {dics[i]}')
-                                print(f'{repr(i)} is {len(dics[i][list(dics[i])[0]])} out of total {len(txts)} chars!\n')
-                                del dics[i]
-                        else:
-                            print(f'No such word {repr(i)} in text!!!')
+                        prres(txts, i, gtp)
+                        del i, gtp, result
             else:
                 for i in alph:
                     i, gtp = lookwd(txts, i)
-                    if gtp:
-                        dics = dics | {i: {len(gtp): gtp}} 
-                        del gtp
-                        if len(i) > 1:
-                            print(f'"{i}": {dics[i]}')
-                            print(f'"{i}" is {len(dics[i][list(dics[i])[0]])} out of total {len(tuple(regex.finditer(txts)))} words!\n')
-                            del dics[i]
-                        else:
-                            print(f'{repr(i)}: {dics[i]}')
-                            print(f'{repr(i)} is {len(dics[i][list(dics[i])[0]])} out of total {len(txts)} chars!\n')
-                            del dics[i]
-                    else:
-                        print(f'No such word {repr(i)} in text!!!')
-            del regex, txts, alph, dics
+                    prres(txts, i, gtp)
+                    del i, gtp
+            del txts, alph
         else:
             alph = dict(sorted(reconst(txts).items(), key = lambda k: len(k[1]), reverse = True))
             once = tuple()
