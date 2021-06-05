@@ -96,7 +96,7 @@ def deconstruct(text: str, filename: str, path: str):
                 text = rd.read()
         else:
             raise Exception('Cannot read non-.txt file!!!')
-    text = Fixstr(text).fixingfs(False)
+    text = Fixstr(text).fixingall(False)
     dics = reconst(text)
     if os.path.isdir(path) and filename.rpartition('.')[2] == 'pickle':
         with open(os.path.join(path, filename), 'wb') as dc:
@@ -172,7 +172,7 @@ def textsortchrs(txts: str, alph: list = None, tm: bool = False):
                 txts = rd.read()
         else:
             raise Exception('Cannot read non-.txt file!!!')
-    txts = Fixstr(txts).fixingfs(False)
+    txts = Fixstr(txts).fixingall(False)
     try:
         if isinstance(alph, list):
             if tm:
